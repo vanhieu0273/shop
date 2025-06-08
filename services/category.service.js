@@ -42,8 +42,8 @@ const createCategory = async (req, res) => {
     try {
         const { name, image, description } = req.body;
 
-        if (!name || !image || !description) {
-            return res.status(400).json({ msg: 'Vui lòng điền đầy đủ thông tin' });
+        if (!name) {
+            return res.status(400).json({ msg: 'Vui lòng điền tên' });
         }
 
         const newCategory = new Category({ name, image, description });

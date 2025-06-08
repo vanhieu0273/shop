@@ -9,12 +9,10 @@ const CategorySchema = new mongoose.Schema(
     },
     image: {
       type: String,
-      require: true,
     },
     description: {
       type: String,
       max: 1000,
-      require: true,
     },
   },
   {

@@ -163,6 +163,8 @@ const getProducts = async (req, res) => {
       search,
       minPrice,
       maxPrice,
+      color,
+      sizes,
       sortBy = 'createdAt',
       sortOrder = 'desc'
     } = req.query;
@@ -178,6 +180,17 @@ const getProducts = async (req, res) => {
     }
     if (search) {
       query.$text = { $search: search };
+    }
+
+    if (color) {
+      query['variants.color'] = color;
+    }
+
+    if (sizes) {
+      console.log('size', sizes);
+      
+      const sizeArray = Array.isArray(sizes) ? sizes : [sizes];
+      query['variants.sizes.size'] = { $in: sizeArray };
     }
 
     const sortOptions = {};
@@ -389,6 +402,134 @@ const updateStock = async (req, res) => {
   }
 };
 
+// Get products that are on sale (have discount > 0)
+const getProductsOnSale = async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 10,
+      sortBy = 'discount',
+      sortOrder = 'desc'
+    } = req.query;
+
+    const query = {
+      discount: { $gt: 0 },
+      isActive: true
+    };
+
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+    const products = await Product.find(query)
+      .sort(sortOptions)
+      .limit(limit * 1)
+      .skip((page - 1) * limit)
+      .populate('category')
+      .populate('variants.color')
+      .populate('variants.sizes.size');
+
+    const total = await Product.countDocuments(query);
+
+    return res.status(200).json({
+      products,
+      totalPages: Math.ceil(total / limit),
+      currentPage: page
+    });
+  } catch (error) {
+    console.error("Error getting products on sale:", error);
+    return res.status(500).json({
+      msg: "Lỗi server"
+    });
+  }
+};
+
+// Get products by category
+const getProductsByCategory = async (req, res) => {
+  try {
+    const { categoryId } = req.params;
+    const {
+      page = 1,
+      limit = 10,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
+
+    const query = {
+      category: categoryId,
+      isActive: true
+    };
+
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+
+    const products = await Product.find(query)
+      .sort(sortOptions)
+      .limit(limit * 1)
+      .skip((page - 1) * limit)
+      .populate('category')
+      .populate('variants.color')
+      .populate('variants.sizes.size');
+
+    const total = await Product.countDocuments(query);
+
+    return res.status(200).json({
+      products,
+      totalPages: Math.ceil(total / limit),
+      currentPage: page
+    });
+  } catch (error) {
+    console.error("Error getting products by category:", error);
+    return res.status(500).json({
+      msg: "Lỗi server"
+    });
+  }
+};
+
+// Get top selling products
+const getTopSellingProducts = async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 5; // Mặc định lấy 5 sản phẩm
+
+    // Tìm sản phẩm bán chạy nhất
+    let products = await Product.find({ isActive: true })
+      .sort({ sold_count: -1 })
+      .limit(limit)
+      .populate('category')
+      .populate('variants.color')
+      .populate('variants.sizes.size');
+
+    // Nếu không có sản phẩm nào được bán (sold_count = 0), lấy 5 sản phẩm mới nhất
+    if (products.length === 0 || products.every(p => p.sold_count === 0)) {
+      products = await Product.find({ isActive: true })
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .populate('category')
+        .populate('variants.color')
+        .populate('variants.sizes.size');
+    }
+
+    return res.status(200).json({
+      products: products.map(product => ({
+        _id: product._id,
+        name: product.name,
+        description: product.description,
+        price: product.price,
+        discount: product.discount,
+        images: product.images,
+        sold_count: product.sold_count,
+        category: product.category,
+        variants: product.variants,
+        rating: product.rating
+      }))
+    });
+  } catch (error) {
+    console.error("Error getting top selling products:", error);
+    return res.status(500).json({
+      msg: "Lỗi server"
+    });
+  }
+};
+
 module.exports = {
   createProduct,
   getProducts,
@@ -396,5 +537,8 @@ module.exports = {
   updateProduct,
   deleteProduct,
   addReview,
-  updateStock
+  updateStock,
+  getProductsOnSale,
+  getProductsByCategory,
+  getTopSellingProducts
 };

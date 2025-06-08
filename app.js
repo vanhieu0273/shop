@@ -3,6 +3,10 @@ var express = require('express');
 var path = require('path');
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');
+var cors = require('cors');
+
+
+
 
 require('dotenv').config();
 
@@ -12,10 +16,10 @@ var categoryRouter = require('./routes/category');
 var sizeRouter = require('./routes/size');
 var colorRouter = require('./routes/color');
 var productRoutes = require('./routes/product');
-
+var paymentRoutes = require('./routes/payment');
 
 var app = express();
-
+app.use(cors());
 
 
 // view engine setup
@@ -34,6 +38,10 @@ app.use('/category', categoryRouter);
 app.use('/size', sizeRouter);
 app.use('/color', colorRouter)
 app.use('/products', productRoutes);
+app.use('/payment', paymentRoutes);
+
+
+
 
 
 // catch 404 and forward to error handler

@@ -53,7 +53,14 @@ const loginUser = async (req, res) => {
     try {
         const { p_userName, p_password } = req.body;
 
-        const user = await User.findOne({ userName: p_userName });
+        // const user = await User.findOne({ userName: p_userName });
+
+        const user = await User.findOne({
+            $or: [
+                { userName: p_userName },
+                { email: p_userName }
+            ]
+        });
 
         if (!user) {
             return res.status(400).json({ msg: "Tài khoản không tồn tại" });

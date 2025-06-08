@@ -7,9 +7,20 @@ const { validate } = require('../middlewares/validate.middleware');
 const { createProductValidation, updateProductValidation, productIdValidation } = require('../validators/product.validator');
 const { upload } = require('../config/cloudinary');
 
+// danh sách sản phẩm bán chạy nhâts
+router.get('/top-selling', productService.getTopSellingProducts);
+router.get('/category/:categoryId', productService.getProductsByCategory);
+router.get('/:id', validate(productIdValidation), productService.getProductById);
+
 // Public routes
 router.get('/', productService.getProducts);
 router.get('/:id', validate(productIdValidation), productService.getProductById);
+
+
+
+
+
+
 
 // Protected routes (require authentication)
 router.post(
