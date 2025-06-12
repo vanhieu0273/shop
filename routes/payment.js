@@ -6,11 +6,36 @@ const {
   updatePaymentStatus,
   getUserAddresses, 
   getOrderDetails,
-  getUserOrders
+  getUserOrders,
+  getUserOrdersWithFilters,
+  getUserOrderStatistics,
+  getAllOrders
 } = require('../services/payment.service');
 const { authMiddleware } = require('../middlewares/auth.middleware');
 
-// Process complete payment
+// Lấy toàn bộ đơn hàng (admin)
+router.get('/orders', authMiddleware, async (req, res) => {
+  try {
+    // Lấy các tham số phân trang và filter từ query
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const filters = {};
+
+    if (req.query.status) filters.status = req.query.status;
+    if (req.query.payment_status) filters.payment_status = req.query.payment_status;
+    if (req.query.startDate && req.query.endDate) {
+      filters.startDate = req.query.startDate;
+      filters.endDate = req.query.endDate;
+    }
+
+    const result = await getAllOrders(page, limit, filters);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Xử lý thanh toán đơn hàng
 router.post('/process', async (req, res) => {
   try {
     const result = await processPayment(req.body);
@@ -20,7 +45,7 @@ router.post('/process', async (req, res) => {
   }
 });
 
-// Get user's order history -> khi đăng nhập mà đặt hàng sẽ lưu lại danh sách đã đặjt hàng
+// Lấy danh sách đơn hàng của người dùng đã đăng nhập
 router.get('/user-orders', authMiddleware, async (req, res) => {
   try {
     const orders = await getUserOrders(req.user.id);
@@ -30,7 +55,7 @@ router.get('/user-orders', authMiddleware, async (req, res) => {
   }
 });
 
-// Update order status (admin only)
+// Cập nhật trạng thái đơn hàng (chỉ dành cho admin)
 router.patch('/orders/:orderId/status', authMiddleware, async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -42,7 +67,7 @@ router.patch('/orders/:orderId/status', authMiddleware, async (req, res) => {
   }
 });
 
-// Update payment status (admin only)
+// Lấy chi tiết một đơn hàng cụ thể(admin)
 router.patch('/orders/:orderId/payment', authMiddleware, async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -65,7 +90,7 @@ router.get('/orders/:orderId', async (req, res) => {
   }
 });
 
-// Get user's previous addresses (if logged in)
+// Lấy danh sách địa chỉ mà người dùng đã từng sử dụng (yêu cầu đăng nhập)
 router.get('/user-addresses', authMiddleware, async (req, res) => {
   try {
     const addresses = await getUserAddresses(req.user.id);
