@@ -15,6 +15,7 @@ router.get('/:id', validate(productIdValidation), productService.getProductById)
 // Public routes
 router.get('/', productService.getProducts);
 router.get('/:id', validate(productIdValidation), productService.getProductById);
+router.get('/:id/reviews', validate(productIdValidation), productService.getProductReviews);
 // Protected routes (require authentication)
 router.post(
   '/',
