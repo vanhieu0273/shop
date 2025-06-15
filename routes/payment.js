@@ -16,10 +16,14 @@ const { authMiddleware } = require('../middlewares/auth.middleware');
 // Lấy toàn bộ đơn hàng (admin)
 router.get('/orders', authMiddleware, async (req, res) => {
   try {
+
     // Lấy các tham số phân trang và filter từ query
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const filters = {};
+
+    console.log('page', page, 'limit', limit);
+    
 
     if (req.query.status) filters.status = req.query.status;
     if (req.query.payment_status) filters.payment_status = req.query.payment_status;

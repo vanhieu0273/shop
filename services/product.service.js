@@ -264,13 +264,22 @@ const getProductById = async (req, res) => {
       }
     }
 
-    // Add canReview field to the response
+
+const relatedProducts = await Product.find({
+  category: product.category._id,
+  _id: { $ne: id } 
+})
+  .limit(5) 
+  .populate("category") 
+  .populate("variants.color")
+  .populate("variants.sizes.size"); 
+
     const productResponse = product.toObject();
     productResponse.canReview = canReview;
+    productResponse.relatedProducts = relatedProducts;
 
     return res.status(200).json(productResponse);
 
-    /////////////////////////////////////////////////////
   } catch (error) {
     console.error("Error getting product:", error);
     return res.status(500).json({
