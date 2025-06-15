@@ -4,9 +4,7 @@ var path = require('path');
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');
 var cors = require('cors');
-
-
-
+var mongoose = require('mongoose');
 
 require('dotenv').config();
 
@@ -19,8 +17,12 @@ var productRoutes = require('./routes/product');
 var paymentRoutes = require('./routes/payment');
 
 var app = express();
-app.use(cors());
 
+// CORS configuration
+app.use(cors({
+  origin: process.env.FRONTEND_URL || '*',
+  credentials: true
+}));
 
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
@@ -32,17 +34,31 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// MongoDB connection with retry logic
+const connectDB = async () => {
+  try {
+    if (!process.env.MONGO_URI) {
+      throw new Error('MONGO_URI is not defined in environment variables');
+    }
+    await mongoose.connect(process.env.MONGO_URI);
+    console.log('MongoDB connected successfully');
+  } catch (err) {
+    console.error('MongoDB connection error:', err);
+    // Don't exit the process, let the application continue
+  }
+};
+
+// Connect to MongoDB
+connectDB();
+
+// Routes
 app.use('/', indexRouter);
 app.use('/users', usersRouter);
 app.use('/category', categoryRouter);
 app.use('/size', sizeRouter);
-app.use('/color', colorRouter)
+app.use('/color', colorRouter);
 app.use('/products', productRoutes);
 app.use('/payment', paymentRoutes);
-
-
-
-
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {
@@ -60,6 +76,5 @@ app.use(function(err, req, res, next) {
   res.render('error');
 });
 
-const port = process.env.PORT || 3000;
-
+// Export the Express app
 module.exports = app;
