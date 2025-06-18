@@ -7,16 +7,16 @@ const { roleMiddleware } = require('../middlewares/role.middleware');
 // Get sales statistics (protected route, only admin and manager can access)
 router.get(
   '/sales',
-//   authMiddleware,
-//   roleMiddleware(['admin', 'manager']),
+  authMiddleware,
+  roleMiddleware(['admin', 'manager']),
   statisticsService.getSalesStatistics
 );
 
 // Get comprehensive financial statistics
 router.get(
   '/financial',
-//   authMiddleware,
-//   roleMiddleware(['admin', 'manager']),
+  authMiddleware,
+  roleMiddleware(['admin', 'manager']),
   statisticsService.getFinancialStatistics
 );
 

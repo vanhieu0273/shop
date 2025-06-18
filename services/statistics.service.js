@@ -6,7 +6,9 @@ const Expense = require('../models/expense.model');
 // Get sales statistics
 const getSalesStatistics = async (req, res) => {
   try {
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, period = 'daily' } = req.query;
+    console.log('startDate, endDate, period', startDate, endDate, period);
+    
     
     // Build date filter
     const dateFilter = {};
@@ -69,36 +71,113 @@ const getSalesStatistics = async (req, res) => {
         })
     );
 
-    // Get daily revenue for the last 7 days
-    const last7Days = Array.from({ length: 7 }, (_, i) => {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      return date.toISOString().split('T')[0];
-    }).reverse();
+    // Get revenue data based on period
+    let revenueData;
+    if (startDate && endDate) {
+      if (period === 'monthly') {
+        // Generate array of months between startDate and endDate
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const months = [];
+        
+        for (let d = new Date(start.getFullYear(), start.getMonth(), 1); 
+             d <= end; 
+             d.setMonth(d.getMonth() + 1)) {
+          months.push({
+            year: d.getFullYear(),
+            month: d.getMonth() + 1,
+            label: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+          });
+        }
 
-    const dailyRevenue = await Promise.all(
-      last7Days.map(async (date) => {
-        const startOfDay = new Date(date);
-        const endOfDay = new Date(date);
-        endOfDay.setDate(endOfDay.getDate() + 1);
+        revenueData = await Promise.all(
+          months.map(async (monthInfo) => {
+            const startOfMonth = new Date(monthInfo.year, monthInfo.month - 1, 1);
+            const endOfMonth = new Date(monthInfo.year, monthInfo.month, 0, 23, 59, 59, 999);
 
-        const dayOrders = await Order.find({
-          created_at: {
-            $gte: startOfDay,
-            $lt: endOfDay
-          },
-          status: 'delivered',
-          payment_status: 'completed'
-        });
+            const monthOrders = await Order.find({
+              created_at: {
+                $gte: startOfMonth,
+                $lte: endOfMonth
+              },
+              status: 'delivered',
+              payment_status: 'completed'
+            });
 
-        const revenue = dayOrders.reduce((sum, order) => sum + order.total_price, 0);
+            const revenue = monthOrders.reduce((sum, order) => sum + order.total_price, 0);
 
-        return {
-          date,
-          revenue
-        };
-      })
-    );
+            return {
+              period: monthInfo.label,
+              revenue
+            };
+          })
+        );
+      } else {
+        // Daily calculation (default)
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const dates = [];
+        
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          dates.push(new Date(d).toISOString().split('T')[0]);
+        }
+
+        revenueData = await Promise.all(
+          dates.map(async (date) => {
+            const startOfDay = new Date(date);
+            const endOfDay = new Date(date);
+            endOfDay.setDate(endOfDay.getDate() + 1);
+
+            const dayOrders = await Order.find({
+              created_at: {
+                $gte: startOfDay,
+                $lt: endOfDay
+              },
+              status: 'delivered',
+              payment_status: 'completed'
+            });
+
+            const revenue = dayOrders.reduce((sum, order) => sum + order.total_price, 0);
+
+            return {
+              period: date,
+              revenue
+            };
+          })
+        );
+      }
+    } else {
+      // Default to last 7 days if no date range provided
+      const last7Days = Array.from({ length: 7 }, (_, i) => {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        return date.toISOString().split('T')[0];
+      }).reverse();
+
+      revenueData = await Promise.all(
+        last7Days.map(async (date) => {
+          const startOfDay = new Date(date);
+          const endOfDay = new Date(date);
+          endOfDay.setDate(endOfDay.getDate() + 1);
+
+          const dayOrders = await Order.find({
+            created_at: {
+              $gte: startOfDay,
+              $lt: endOfDay
+            },
+            status: 'delivered',
+            payment_status: 'completed'
+          });
+
+          const revenue = dayOrders.reduce((sum, order) => sum + order.total_price, 0);
+
+          return {
+            period: date,
+            revenue
+          };
+        })
+      );
+    }
 
     // Get payment method statistics
     const paymentMethodStats = orders.reduce((stats, order) => {
@@ -118,7 +197,8 @@ const getSalesStatistics = async (req, res) => {
       totalOrders,
       totalProductsSold,
       topSellingProducts,
-      dailyRevenue,
+      revenueData,
+      period,
       paymentMethodStats
     });
   } catch (error) {
@@ -132,7 +212,7 @@ const getSalesStatistics = async (req, res) => {
 // Get comprehensive financial statistics
 const getFinancialStatistics = async (req, res) => {
   try {
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, period = 'daily' } = req.query;
     
     // Build date filter
     const dateFilter = {};
@@ -191,50 +271,155 @@ const getFinancialStatistics = async (req, res) => {
       return stats;
     }, {});
 
-    // Get daily statistics for the last 7 days
-    const last7Days = Array.from({ length: 7 }, (_, i) => {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      return date.toISOString().split('T')[0];
-    }).reverse();
+    // Get statistics data based on period
+    let statsData;
+    if (startDate && endDate) {
+      if (period === 'monthly') {
+        // Generate array of months between startDate and endDate
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const months = [];
+        
+        for (let d = new Date(start.getFullYear(), start.getMonth(), 1); 
+             d <= end; 
+             d.setMonth(d.getMonth() + 1)) {
+          months.push({
+            year: d.getFullYear(),
+            month: d.getMonth() + 1,
+            label: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+          });
+        }
 
-    const dailyStats = await Promise.all(
-      last7Days.map(async (date) => {
-        const startOfDay = new Date(date);
-        const endOfDay = new Date(date);
-        endOfDay.setDate(endOfDay.getDate() + 1);
+        statsData = await Promise.all(
+          months.map(async (monthInfo) => {
+            const startOfMonth = new Date(monthInfo.year, monthInfo.month - 1, 1);
+            const endOfMonth = new Date(monthInfo.year, monthInfo.month, 0, 23, 59, 59, 999);
 
-        // Get orders for the day
-        const dayOrders = await Order.find({
-          created_at: {
-            $gte: startOfDay,
-            $lt: endOfDay
-          },
-          status: 'delivered',
-          payment_status: 'completed'
-        });
+            // Get orders for the month
+            const monthOrders = await Order.find({
+              created_at: {
+                $gte: startOfMonth,
+                $lte: endOfMonth
+              },
+              status: 'delivered',
+              payment_status: 'completed'
+            });
 
-        // Get expenses for the day
-        const dayExpenses = await Expense.find({
-          date: {
-            $gte: startOfDay,
-            $lt: endOfDay
-          },
-          status: 'completed'
-        });
+            // Get expenses for the month
+            const monthExpenses = await Expense.find({
+              date: {
+                $gte: startOfMonth,
+                $lte: endOfMonth
+              },
+              status: 'completed'
+            });
 
-        const revenue = dayOrders.reduce((sum, order) => sum + order.total_price, 0);
-        const expense = dayExpenses.reduce((sum, exp) => sum + exp.amount, 0);
-        const profit = revenue - expense;
+            const revenue = monthOrders.reduce((sum, order) => sum + order.total_price, 0);
+            const expense = monthExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+            const profit = revenue - expense;
 
-        return {
-          date,
-          revenue,
-          expense,
-          profit
-        };
-      })
-    );
+            return {
+              period: monthInfo.label,
+              revenue,
+              expense,
+              profit
+            };
+          })
+        );
+      } else {
+        // Daily calculation (default)
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const dates = [];
+        
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          dates.push(new Date(d).toISOString().split('T')[0]);
+        }
+
+        statsData = await Promise.all(
+          dates.map(async (date) => {
+            const startOfDay = new Date(date);
+            const endOfDay = new Date(date);
+            endOfDay.setDate(endOfDay.getDate() + 1);
+
+            // Get orders for the day
+            const dayOrders = await Order.find({
+              created_at: {
+                $gte: startOfDay,
+                $lt: endOfDay
+              },
+              status: 'delivered',
+              payment_status: 'completed'
+            });
+
+            // Get expenses for the day
+            const dayExpenses = await Expense.find({
+              date: {
+                $gte: startOfDay,
+                $lt: endOfDay
+              },
+              status: 'completed'
+            });
+
+            const revenue = dayOrders.reduce((sum, order) => sum + order.total_price, 0);
+            const expense = dayExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+            const profit = revenue - expense;
+
+            return {
+              period: date,
+              revenue,
+              expense,
+              profit
+            };
+          })
+        );
+      }
+    } else {
+      // Default to last 7 days if no date range provided
+      const last7Days = Array.from({ length: 7 }, (_, i) => {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        return date.toISOString().split('T')[0];
+      }).reverse();
+
+      statsData = await Promise.all(
+        last7Days.map(async (date) => {
+          const startOfDay = new Date(date);
+          const endOfDay = new Date(date);
+          endOfDay.setDate(endOfDay.getDate() + 1);
+
+          // Get orders for the day
+          const dayOrders = await Order.find({
+            created_at: {
+              $gte: startOfDay,
+              $lt: endOfDay
+            },
+            status: 'delivered',
+            payment_status: 'completed'
+          });
+
+          // Get expenses for the day
+          const dayExpenses = await Expense.find({
+            date: {
+              $gte: startOfDay,
+              $lt: endOfDay
+            },
+            status: 'completed'
+          });
+
+          const revenue = dayOrders.reduce((sum, order) => sum + order.total_price, 0);
+          const expense = dayExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+          const profit = revenue - expense;
+
+          return {
+            period: date,
+            revenue,
+            expense,
+            profit
+          };
+        })
+      );
+    }
 
     // Get top selling products with profit calculation
     const productSales = {};
@@ -280,7 +465,8 @@ const getFinancialStatistics = async (req, res) => {
         byCategory: expenseByCategory,
         total: totalExpenses
       },
-      dailyStats,
+      statsData,
+      period,
       topSellingProducts
     });
   } catch (error) {
