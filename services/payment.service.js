@@ -161,9 +161,9 @@ const processPayment = async (paymentData) => {
     // Add bank transfer info if payment method is bank transfer
     if (paymentMethod === "bank_transfer") {
       orderData.bank_transfer_info = {
-        account_number: "1234567890",
-        account_name: "Your Store Name",
-        bank_name: "Example Bank",
+        account_number: "666666",
+        account_name: "PHUNG VAN HIEU",
+        bank_name: "MB Bank",
         transfer_amount: totalPrice + shippingFee,
         transfer_content: `Thanh toan don hang ${Date.now()}`,
       };
