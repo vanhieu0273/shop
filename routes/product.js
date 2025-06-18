@@ -58,4 +58,12 @@ router.put(
   productService.updateStock
 );
 
+router.put(
+  '/:id/import-price',
+  authMiddleware,
+  roleMiddleware(['admin', 'manager']),
+  validate(productIdValidation),
+  productService.updateImportPrice
+);
+
 module.exports = router;

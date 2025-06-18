@@ -20,4 +20,12 @@ router.get(
   statisticsService.getFinancialStatistics
 );
 
+// Get detailed product profit information
+router.get(
+  '/product-profit',
+  authMiddleware,
+  roleMiddleware(['admin', 'manager']),
+  statisticsService.getProductProfitDetails
+);
+
 module.exports = router; 

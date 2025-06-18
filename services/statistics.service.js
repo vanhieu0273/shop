@@ -48,7 +48,8 @@ const getSalesStatistics = async (req, res) => {
       if (!productSales[item.product_id]) {
         productSales[item.product_id] = {
           quantity: 0,
-          revenue: 0
+          revenue: 0,
+          cost: 0
         };
       }
       productSales[item.product_id].quantity += item.quantity;
@@ -62,11 +63,20 @@ const getSalesStatistics = async (req, res) => {
         .slice(0, 5)
         .map(async ([productId, sales]) => {
           const product = await Product.findById(productId)
-            .select('name price images');
+            .select('name price importPrice images');
+          
+          // Tính toán chi phí và lãi
+          const cost = product.importPrice * sales.quantity;
+          const profit = sales.revenue - cost;
+          const profitMargin = sales.revenue > 0 ? (profit / sales.revenue) * 100 : 0;
+          
           return {
             product: product,
             quantity: sales.quantity,
-            revenue: sales.revenue
+            revenue: sales.revenue,
+            cost: cost,
+            profit: profit,
+            profitMargin: profitMargin.toFixed(2) + '%'
           };
         })
     );
@@ -104,11 +114,38 @@ const getSalesStatistics = async (req, res) => {
               payment_status: 'completed'
             });
 
+            // Get order items for the month
+            const monthOrderItems = await OrderItem.find({
+              order_id: { $in: monthOrders.map(order => order._id) }
+            });
+
+            // Calculate product costs for the month
+            const monthProductCosts = {};
+            monthOrderItems.forEach(item => {
+              if (!monthProductCosts[item.product_id]) {
+                monthProductCosts[item.product_id] = 0;
+              }
+              monthProductCosts[item.product_id] += item.quantity;
+            });
+
+            // Get products to calculate cost
+            const monthProducts = await Product.find({
+              _id: { $in: Object.keys(monthProductCosts) }
+            }).select('importPrice');
+
+            let monthCost = 0;
+            monthProducts.forEach(product => {
+              monthCost += product.importPrice * monthProductCosts[product._id.toString()];
+            });
+
             const revenue = monthOrders.reduce((sum, order) => sum + order.total_price, 0);
+            const profit = revenue - monthCost;
 
             return {
               period: monthInfo.label,
-              revenue
+              revenue,
+              cost: monthCost,
+              profit
             };
           })
         );
@@ -137,11 +174,38 @@ const getSalesStatistics = async (req, res) => {
               payment_status: 'completed'
             });
 
+            // Get order items for the day
+            const dayOrderItems = await OrderItem.find({
+              order_id: { $in: dayOrders.map(order => order._id) }
+            });
+
+            // Calculate product costs for the day
+            const dayProductCosts = {};
+            dayOrderItems.forEach(item => {
+              if (!dayProductCosts[item.product_id]) {
+                dayProductCosts[item.product_id] = 0;
+              }
+              dayProductCosts[item.product_id] += item.quantity;
+            });
+
+            // Get products to calculate cost
+            const dayProducts = await Product.find({
+              _id: { $in: Object.keys(dayProductCosts) }
+            }).select('importPrice');
+
+            let dayCost = 0;
+            dayProducts.forEach(product => {
+              dayCost += product.importPrice * dayProductCosts[product._id.toString()];
+            });
+
             const revenue = dayOrders.reduce((sum, order) => sum + order.total_price, 0);
+            const profit = revenue - dayCost;
 
             return {
               period: date,
-              revenue
+              revenue,
+              cost: dayCost,
+              profit
             };
           })
         );
@@ -169,11 +233,38 @@ const getSalesStatistics = async (req, res) => {
             payment_status: 'completed'
           });
 
+          // Get order items for the day
+          const dayOrderItems = await OrderItem.find({
+            order_id: { $in: dayOrders.map(order => order._id) }
+          });
+
+          // Calculate product costs for the day
+          const dayProductCosts = {};
+          dayOrderItems.forEach(item => {
+            if (!dayProductCosts[item.product_id]) {
+              dayProductCosts[item.product_id] = 0;
+            }
+            dayProductCosts[item.product_id] += item.quantity;
+          });
+
+          // Get products to calculate cost
+          const dayProducts = await Product.find({
+            _id: { $in: Object.keys(dayProductCosts) }
+          }).select('importPrice');
+
+          let dayCost = 0;
+          dayProducts.forEach(product => {
+            dayCost += product.importPrice * dayProductCosts[product._id.toString()];
+          });
+
           const revenue = dayOrders.reduce((sum, order) => sum + order.total_price, 0);
+          const profit = revenue - dayCost;
 
           return {
             period: date,
-            revenue
+            revenue,
+            cost: dayCost,
+            profit
           };
         })
       );
@@ -192,8 +283,32 @@ const getSalesStatistics = async (req, res) => {
       return stats;
     }, {});
 
+    // Calculate total cost based on import price
+    const productCosts = {};
+    orderItems.forEach(item => {
+      if (!productCosts[item.product_id]) {
+        productCosts[item.product_id] = 0;
+      }
+      productCosts[item.product_id] += item.quantity;
+    });
+
+    // Get products to calculate total cost
+    const products = await Product.find({
+      _id: { $in: Object.keys(productCosts) }
+    }).select('importPrice');
+
+    let totalCost = 0;
+    products.forEach(product => {
+      totalCost += product.importPrice * productCosts[product._id.toString()];
+    });
+
+    // Calculate profit based on import price
+    const profit = totalRevenue - totalCost;
+
     return res.status(200).json({
       totalRevenue,
+      totalCost,
+      profit,
       totalOrders,
       totalProductsSold,
       topSellingProducts,
@@ -246,6 +361,28 @@ const getFinancialStatistics = async (req, res) => {
 
     const totalProductsSold = orderItems.reduce((sum, item) => sum + item.quantity, 0);
 
+    // Calculate total cost based on import price
+    const productCosts = {};
+    orderItems.forEach(item => {
+      if (!productCosts[item.product_id]) {
+        productCosts[item.product_id] = 0;
+      }
+      productCosts[item.product_id] += item.quantity;
+    });
+
+    // Get products to calculate total cost
+    const products = await Product.find({
+      _id: { $in: Object.keys(productCosts) }
+    }).select('importPrice');
+
+    let totalCost = 0;
+    products.forEach(product => {
+      totalCost += product.importPrice * productCosts[product._id.toString()];
+    });
+
+    // Calculate profit based on import price
+    const profit = totalRevenue - totalCost;
+
     // Get all expenses within date range
     const expenses = await Expense.find({
       ...dateFilter,
@@ -254,9 +391,6 @@ const getFinancialStatistics = async (req, res) => {
 
     // Calculate total expenses
     const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
-
-    // Calculate profit
-    const profit = totalRevenue - totalExpenses;
 
     // Get expenses by category
     const expenseByCategory = expenses.reduce((stats, expense) => {
@@ -305,6 +439,30 @@ const getFinancialStatistics = async (req, res) => {
               payment_status: 'completed'
             });
 
+            // Get order items for the month
+            const monthOrderItems = await OrderItem.find({
+              order_id: { $in: monthOrders.map(order => order._id) }
+            });
+
+            // Calculate product costs for the month
+            const monthProductCosts = {};
+            monthOrderItems.forEach(item => {
+              if (!monthProductCosts[item.product_id]) {
+                monthProductCosts[item.product_id] = 0;
+              }
+              monthProductCosts[item.product_id] += item.quantity;
+            });
+
+            // Get products to calculate cost
+            const monthProducts = await Product.find({
+              _id: { $in: Object.keys(monthProductCosts) }
+            }).select('importPrice');
+
+            let monthCost = 0;
+            monthProducts.forEach(product => {
+              monthCost += product.importPrice * monthProductCosts[product._id.toString()];
+            });
+
             // Get expenses for the month
             const monthExpenses = await Expense.find({
               date: {
@@ -316,11 +474,12 @@ const getFinancialStatistics = async (req, res) => {
 
             const revenue = monthOrders.reduce((sum, order) => sum + order.total_price, 0);
             const expense = monthExpenses.reduce((sum, exp) => sum + exp.amount, 0);
-            const profit = revenue - expense;
+            const profit = revenue - monthCost - expense;
 
             return {
               period: monthInfo.label,
               revenue,
+              cost: monthCost,
               expense,
               profit
             };
@@ -352,6 +511,30 @@ const getFinancialStatistics = async (req, res) => {
               payment_status: 'completed'
             });
 
+            // Get order items for the day
+            const dayOrderItems = await OrderItem.find({
+              order_id: { $in: dayOrders.map(order => order._id) }
+            });
+
+            // Calculate product costs for the day
+            const dayProductCosts = {};
+            dayOrderItems.forEach(item => {
+              if (!dayProductCosts[item.product_id]) {
+                dayProductCosts[item.product_id] = 0;
+              }
+              dayProductCosts[item.product_id] += item.quantity;
+            });
+
+            // Get products to calculate cost
+            const dayProducts = await Product.find({
+              _id: { $in: Object.keys(dayProductCosts) }
+            }).select('importPrice');
+
+            let dayCost = 0;
+            dayProducts.forEach(product => {
+              dayCost += product.importPrice * dayProductCosts[product._id.toString()];
+            });
+
             // Get expenses for the day
             const dayExpenses = await Expense.find({
               date: {
@@ -363,11 +546,12 @@ const getFinancialStatistics = async (req, res) => {
 
             const revenue = dayOrders.reduce((sum, order) => sum + order.total_price, 0);
             const expense = dayExpenses.reduce((sum, exp) => sum + exp.amount, 0);
-            const profit = revenue - expense;
+            const profit = revenue - dayCost - expense;
 
             return {
               period: date,
               revenue,
+              cost: dayCost,
               expense,
               profit
             };
@@ -398,6 +582,30 @@ const getFinancialStatistics = async (req, res) => {
             payment_status: 'completed'
           });
 
+          // Get order items for the day
+          const dayOrderItems = await OrderItem.find({
+            order_id: { $in: dayOrders.map(order => order._id) }
+          });
+
+          // Calculate product costs for the day
+          const dayProductCosts = {};
+          dayOrderItems.forEach(item => {
+            if (!dayProductCosts[item.product_id]) {
+              dayProductCosts[item.product_id] = 0;
+            }
+            dayProductCosts[item.product_id] += item.quantity;
+          });
+
+          // Get products to calculate cost
+          const dayProducts = await Product.find({
+            _id: { $in: Object.keys(dayProductCosts) }
+          }).select('importPrice');
+
+          let dayCost = 0;
+          dayProducts.forEach(product => {
+            dayCost += product.importPrice * dayProductCosts[product._id.toString()];
+          });
+
           // Get expenses for the day
           const dayExpenses = await Expense.find({
             date: {
@@ -409,11 +617,12 @@ const getFinancialStatistics = async (req, res) => {
 
           const revenue = dayOrders.reduce((sum, order) => sum + order.total_price, 0);
           const expense = dayExpenses.reduce((sum, exp) => sum + exp.amount, 0);
-          const profit = revenue - expense;
+          const profit = revenue - dayCost - expense;
 
           return {
             period: date,
             revenue,
+            cost: dayCost,
             expense,
             profit
           };
@@ -440,11 +649,20 @@ const getFinancialStatistics = async (req, res) => {
         .slice(0, 5)
         .map(async ([productId, sales]) => {
           const product = await Product.findById(productId)
-            .select('name price images');
+            .select('name price importPrice images');
+          
+          // Tính toán chi phí và lãi
+          const cost = product.importPrice * sales.quantity;
+          const profit = sales.revenue - cost;
+          const profitMargin = sales.revenue > 0 ? (profit / sales.revenue) * 100 : 0;
+          
           return {
             product: product,
             quantity: sales.quantity,
-            revenue: sales.revenue
+            revenue: sales.revenue,
+            cost: cost,
+            profit: profit,
+            profitMargin: profitMargin.toFixed(2) + '%'
           };
         })
     );
@@ -455,6 +673,7 @@ const getFinancialStatistics = async (req, res) => {
     return res.status(200).json({
       summary: {
         totalRevenue,
+        totalCost,
         totalExpenses,
         profit,
         profitMargin: profitMargin.toFixed(2) + '%',
@@ -477,7 +696,105 @@ const getFinancialStatistics = async (req, res) => {
   }
 };
 
+// Get detailed product profit information
+const getProductProfitDetails = async (req, res) => {
+  try {
+    const { startDate, endDate, page = 1, limit = 10 } = req.query;
+    
+    // Build date filter
+    const dateFilter = {};
+    if (startDate || endDate) {
+      dateFilter.created_at = {};
+      if (startDate) {
+        dateFilter.created_at.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        dateFilter.created_at.$lte = new Date(endDate);
+      }
+    }
+
+    // Get all completed orders within date range
+    const orders = await Order.find({
+      ...dateFilter,
+      status: 'delivered',
+      payment_status: 'completed'
+    });
+
+    // Get order items
+    const orderItems = await OrderItem.find({
+      order_id: { $in: orders.map(order => order._id) }
+    });
+
+    // Group by product
+    const productStats = {};
+    orderItems.forEach(item => {
+      if (!productStats[item.product_id]) {
+        productStats[item.product_id] = {
+          quantity: 0,
+          revenue: 0,
+          orders: []
+        };
+      }
+      productStats[item.product_id].quantity += item.quantity;
+      productStats[item.product_id].revenue += item.price * item.quantity;
+      productStats[item.product_id].orders.push(item.order_id);
+    });
+
+    // Get products with import price
+    const products = await Product.find({
+      _id: { $in: Object.keys(productStats) }
+    }).select('name price importPrice images category');
+
+    // Calculate profit for each product
+    const productProfitDetails = products.map(product => {
+      const stats = productStats[product._id.toString()];
+      const cost = product.importPrice * stats.quantity;
+      const profit = stats.revenue - cost;
+      const profitMargin = stats.revenue > 0 ? (profit / stats.revenue) * 100 : 0;
+      
+      return {
+        product: {
+          _id: product._id,
+          name: product.name,
+          price: product.price,
+          importPrice: product.importPrice,
+          images: product.images,
+          category: product.category
+        },
+        quantity: stats.quantity,
+        revenue: stats.revenue,
+        cost: cost,
+        profit: profit,
+        profitMargin: profitMargin.toFixed(2) + '%',
+        orderCount: new Set(stats.orders).size
+      };
+    });
+
+    // Sort by profit (descending)
+    productProfitDetails.sort((a, b) => b.profit - a.profit);
+
+    // Apply pagination
+    const total = productProfitDetails.length;
+    const startIndex = (page - 1) * limit;
+    const endIndex = page * limit;
+    const paginatedProducts = productProfitDetails.slice(startIndex, endIndex);
+
+    return res.status(200).json({
+      products: paginatedProducts,
+      totalPages: Math.ceil(total / limit),
+      currentPage: parseInt(page),
+      totalProducts: total
+    });
+  } catch (error) {
+    console.error("Error getting product profit details:", error);
+    return res.status(500).json({
+      msg: "Lỗi server"
+    });
+  }
+};
+
 module.exports = {
   getSalesStatistics,
-  getFinancialStatistics
+  getFinancialStatistics,
+  getProductProfitDetails
 }; 

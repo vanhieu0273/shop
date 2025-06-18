@@ -14,6 +14,7 @@ const createProduct = async (req, res) => {
       name,
       description,
       price,
+      importPrice,
       discount,
       category,
       variants,
@@ -22,7 +23,7 @@ const createProduct = async (req, res) => {
       images,
     } = req.body;
 
-    if (!name || !description || !price || !category || !variants) {
+    if (!name || !description || !price || !importPrice || !category || !variants) {
       return res.status(400).json({
         msg: "Thiếu thông tin bắt buộc",
       });
@@ -43,6 +44,18 @@ const createProduct = async (req, res) => {
     if (isNaN(price) || price <= 0) {
       return res.status(400).json({
         msg: "Giá sản phẩm phải là số dương",
+      });
+    }
+
+    if (isNaN(importPrice) || importPrice <= 0) {
+      return res.status(400).json({
+        msg: "Giá nhập phải là số dương",
+      });
+    }
+
+    if (importPrice >= price) {
+      return res.status(400).json({
+        msg: "Giá nhập phải nhỏ hơn giá bán",
       });
     }
 
@@ -126,6 +139,7 @@ const createProduct = async (req, res) => {
       name,
       description,
       price,
+      importPrice,
       discount: discount || 0,
       images,
       category,
@@ -206,6 +220,18 @@ const getProducts = async (req, res) => {
       .populate("variants.color")
       .populate("variants.sizes.size");
 
+    // Remove importPrice from response for non-admin users
+    const userRole = req.user?.role;
+    if (userRole !== 'admin') {
+      products.forEach(product => {
+        if (product.toObject) {
+          const productObj = product.toObject();
+          delete productObj.importPrice;
+          Object.assign(product, productObj);
+        }
+      });
+    }
+
     const total = await Product.countDocuments(query);
 
     return res.status(200).json({
@@ -277,6 +303,21 @@ const relatedProducts = await Product.find({
     const productResponse = product.toObject();
     productResponse.canReview = canReview;
     productResponse.relatedProducts = relatedProducts;
+
+    // Remove importPrice from response for non-admin users
+    const userRole = req.user?.role;
+    if (userRole !== 'admin') {
+      delete productResponse.importPrice;
+      if (relatedProducts) {
+        relatedProducts.forEach(relatedProduct => {
+          if (relatedProduct.toObject) {
+            const relatedObj = relatedProduct.toObject();
+            delete relatedObj.importPrice;
+            Object.assign(relatedProduct, relatedObj);
+          }
+        });
+      }
+    }
 
     return res.status(200).json(productResponse);
 
@@ -464,6 +505,47 @@ const updateStock = async (req, res) => {
     });
   } catch (error) {
     console.error("Error updating stock:", error);
+    return res.status(500).json({
+      msg: "Lỗi server",
+    });
+  }
+};
+
+// Update product import price
+const updateImportPrice = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { importPrice } = req.body;
+
+    if (!importPrice || isNaN(importPrice) || importPrice <= 0) {
+      return res.status(400).json({
+        msg: "Giá nhập phải là số dương",
+      });
+    }
+
+    const product = await Product.findById(id);
+
+    if (!product) {
+      return res.status(404).json({
+        msg: "Không tìm thấy sản phẩm",
+      });
+    }
+
+    if (importPrice >= product.price) {
+      return res.status(400).json({
+        msg: "Giá nhập phải nhỏ hơn giá bán",
+      });
+    }
+
+    product.importPrice = importPrice;
+    await product.save();
+
+    return res.status(200).json({
+      msg: "Cập nhật giá nhập thành công",
+      product,
+    });
+  } catch (error) {
+    console.error("Error updating import price:", error);
     return res.status(500).json({
       msg: "Lỗi server",
     });
@@ -687,6 +769,6 @@ module.exports = {
   getProductsOnSale,
   getProductsByCategory,
   getTopSellingProducts,
-  getProductReviews
-
+  getProductReviews,
+  updateImportPrice
 };
