@@ -12,7 +12,7 @@ router.put("/update/:id", authMiddleware, updateInfoUser);
 
 router.delete("/delete/:id", authMiddleware, deleteUser);
 
-router.get('/list-user' , getAllUser)
+router.get('/list-user', authMiddleware, getAllUser)
 
 // Gửi OTP đến email để đặt lại mật khẩu
 router.post('/forgot-password', forgotPassword);

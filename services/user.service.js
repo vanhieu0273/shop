@@ -144,46 +144,76 @@ const deleteUser = async (req, res) => {
     try {
         const id = req.params.id;
 
-        //kiểm tra id từ database có bằng id truyền lên hay k
-        if (req.body.user._id.toString() !== id) {
-            return res.status(403).json({
-                msg: "Bạn không có quyền chỉnh sửa!",
+        // Kiểm tra ID có hợp lệ không
+        if (!id) {
+            return res.status(400).json({
+                msg: "ID không hợp lệ!",
             });
         }
 
+        // Kiểm tra user có tồn tại không
+        const userToDelete = await User.findById(id);
+        if (!userToDelete) {
+            return res.status(404).json({
+                msg: "Không tìm thấy người dùng!",
+            });
+        }
+
+        // Kiểm tra quyền: chỉ cho phép xóa chính mình hoặc admin có thể xóa bất kỳ ai
+        const currentUser = req.user; // Lấy từ middleware auth
+        const isAdmin = currentUser.role === 'admin';
+        const isSelf = currentUser._id.toString() === id;
+
+        if (!isAdmin && !isSelf) {
+            return res.status(403).json({
+                msg: "Bạn không có quyền xóa người dùng này!",
+            });
+        }
+
+        // Không cho phép xóa admin khác (chỉ admin có thể xóa admin khác)
+        if (userToDelete.role === 'admin' && !isSelf && !isAdmin) {
+            return res.status(403).json({
+                msg: "Không thể xóa tài khoản admin khác!",
+            });
+        }
+
+        // Xóa user
         await User.findByIdAndDelete(id);
 
         return res.status(200).json({
-            msg: "Đã xoá tài khoản thành công!",
+            msg: "Đã xóa tài khoản thành công!",
         });
     } catch (error) {
+        console.error('Delete user error:', error);
         return res.status(500).json({
-            msg: "Internal server error",
-            error,
+            msg: "Lỗi server",
+            error: error.message,
         });
     }
 };
 
 const getAllUser = async (req, res) => {
     try {
+        // Kiểm tra quyền: chỉ admin mới có thể xem danh sách user
+        const currentUser = req.user;
+        if (currentUser.role !== 'admin') {
+            return res.status(403).json({
+                msg: "Chỉ admin mới có quyền xem danh sách người dùng!",
+            });
+        }
 
-        // const id = req.params.id;
-
-        // const data = await User.findById(id)
-
-        const listUsers = await User.find().sort({ username: 1 });
+        const listUsers = await User.find().select('-password -resetOTP -otpExpires').sort({ createdAt: -1 });
 
         return res.status(200).json({
             data: listUsers,
-            msg: 'Success!'
-        })
+            msg: 'Lấy danh sách người dùng thành công!'
+        });
 
     } catch (error) {
         console.log('error', error);
-
         return res.status(500).json({
-            msg: "Internal server error",
-            error,
+            msg: "Lỗi server",
+            error: error.message,
         });
     }
 }
