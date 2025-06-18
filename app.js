@@ -15,6 +15,8 @@ var sizeRouter = require('./routes/size');
 var colorRouter = require('./routes/color');
 var productRoutes = require('./routes/product');
 var paymentRoutes = require('./routes/payment');
+var expenseRoutes = require('./routes/expense');
+var statisticsRoutes = require('./routes/statistics');
 
 var app = express();
 
@@ -59,6 +61,8 @@ app.use('/size', sizeRouter);
 app.use('/color', colorRouter);
 app.use('/products', productRoutes);
 app.use('/payment', paymentRoutes);
+app.use('/expense', expenseRoutes)
+app.use('/statistics', statisticsRoutes);
 
 // catch 404 and forward to error handler
 app.use(function(req, res, next) {

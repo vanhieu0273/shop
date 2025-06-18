@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const expenseService = require('../service/expense.service');
-const { authMiddleware } = require('../middleware/auth.middleware');
-const { roleMiddleware } = require('../middleware/role.middleware');
+const expenseService = require('../services/expense.service');
+const { authMiddleware } = require('../middlewares/auth.middleware');
+const { roleMiddleware } = require('../middlewares/role.middleware');
 const { upload } = require('../config/cloudinary');
 
 // Protected routes (require authentication and admin/manager role)

@@ -1,7 +1,7 @@
-const Order = require('../model/Order');
-const OrderItem = require('../model/OrderItem');
-const Product = require('../model/Product.model');
-const Expense = require('../model/expense.model');
+const Order = require('../models/order.model');
+const OrderItem = require('../models/orderItem.model');
+const Product = require('../models/product.model');
+const Expense = require('../models/expense.model');
 
 // Get sales statistics
 const getSalesStatistics = async (req, res) => {

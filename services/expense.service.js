@@ -1,4 +1,4 @@
-const Expense = require('../model/expense.model');
+const Expense = require('../models/expense.model');
 const { cloudinary } = require('../config/cloudinary');
 
 // Create a new expense
