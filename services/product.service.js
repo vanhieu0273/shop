@@ -6,6 +6,20 @@ const { cloudinary } = require("../config/cloudinary");
 const OrderItem = require("../models/orderItem.model");
 const Order = require("../models/order.model");
 const User = require("../models/user.model");
+const jwt = require("jsonwebtoken");
+
+// Helper function to get user role from token
+const getUserRoleFromToken = (req) => {
+  try {
+    const token = req.header("Authorization")?.replace("Bearer ", "");
+    if (!token) return null;
+    
+    const decoded = jwt.verify(token, process.env.SECRET_KEY);
+    return decoded.role || null;
+  } catch (error) {
+    return null;
+  }
+};
 
 // Create a new product
 const createProduct = async (req, res) => {
@@ -23,7 +37,14 @@ const createProduct = async (req, res) => {
       images,
     } = req.body;
 
-    if (!name || !description || !price || !importPrice || !category || !variants) {
+    if (
+      !name ||
+      !description ||
+      !price ||
+      !importPrice ||
+      !category ||
+      !variants
+    ) {
       return res.status(400).json({
         msg: "Thiếu thông tin bắt buộc",
       });
@@ -221,13 +242,21 @@ const getProducts = async (req, res) => {
       .populate("variants.sizes.size");
 
     // Remove importPrice from response for non-admin users
-    const userRole = req.user?.role;
-    if (userRole !== 'admin') {
-      products.forEach(product => {
+    const userRole = req.user?.role || getUserRoleFromToken(req);
+    if (userRole !== "admin" && userRole !== "manager") {
+      products.forEach((product) => {
         if (product.toObject) {
           const productObj = product.toObject();
           delete productObj.importPrice;
           Object.assign(product, productObj);
+        }
+      });
+    } else {
+      // Đảm bảo admin/manager thấy importPrice, nếu chưa có thì đặt giá trị mặc định
+      products.forEach((product) => {
+        if (product.importPrice === undefined || product.importPrice === null) {
+          product.importPrice = Math.round(product.price * 0.7);
+          console.log(`⚠️ Sản phẩm ${product.name} chưa có importPrice, đã đặt giá trị mặc định: ${product.importPrice}`);
         }
       });
     }
@@ -290,26 +319,25 @@ const getProductById = async (req, res) => {
       }
     }
 
-
-const relatedProducts = await Product.find({
-  category: product.category._id,
-  _id: { $ne: id } 
-})
-  .limit(5) 
-  .populate("category") 
-  .populate("variants.color")
-  .populate("variants.sizes.size"); 
+    const relatedProducts = await Product.find({
+      category: product.category._id,
+      _id: { $ne: id },
+    })
+      .limit(5)
+      .populate("category")
+      .populate("variants.color")
+      .populate("variants.sizes.size");
 
     const productResponse = product.toObject();
     productResponse.canReview = canReview;
     productResponse.relatedProducts = relatedProducts;
 
     // Remove importPrice from response for non-admin users
-    const userRole = req.user?.role;
-    if (userRole !== 'admin') {
+    const userRole = req.user?.role || getUserRoleFromToken(req);
+    if (userRole !== "admin" && userRole !== "manager") {
       delete productResponse.importPrice;
       if (relatedProducts) {
-        relatedProducts.forEach(relatedProduct => {
+        relatedProducts.forEach((relatedProduct) => {
           if (relatedProduct.toObject) {
             const relatedObj = relatedProduct.toObject();
             delete relatedObj.importPrice;
@@ -317,10 +345,15 @@ const relatedProducts = await Product.find({
           }
         });
       }
+    } else {
+      // Đảm bảo admin/manager thấy importPrice, nếu chưa có thì đặt giá trị mặc định
+      if (productResponse.importPrice === undefined || productResponse.importPrice === null) {
+        productResponse.importPrice = Math.round(productResponse.price * 0.7);
+        console.log(`⚠️ Sản phẩm ${productResponse.name} chưa có importPrice, đã đặt giá trị mặc định: ${productResponse.importPrice}`);
+      }
     }
 
     return res.status(200).json(productResponse);
-
   } catch (error) {
     console.error("Error getting product:", error);
     return res.status(500).json({
@@ -417,15 +450,15 @@ const addReview = async (req, res) => {
       order_id: {
         $in: await Order.find({
           user_id: userId,
-          status: 'delivered',
-          payment_status: 'completed'
-        }).distinct('_id')
-      }
+          status: "delivered",
+          payment_status: "completed",
+        }).distinct("_id"),
+      },
     });
 
     if (!orderItem) {
       return res.status(403).json({
-        msg: "Bạn chỉ có thể đánh giá sản phẩm sau khi đã mua và nhận được hàng"
+        msg: "Bạn chỉ có thể đánh giá sản phẩm sau khi đã mua và nhận được hàng",
       });
     }
 
@@ -578,6 +611,18 @@ const getProductsOnSale = async (req, res) => {
       .populate("variants.color")
       .populate("variants.sizes.size");
 
+    // Remove importPrice from response for non-admin/manager users
+    const userRole = req.user?.role;
+    if (userRole !== "admin" && userRole !== "manager") {
+      products.forEach((product) => {
+        if (product.toObject) {
+          const productObj = product.toObject();
+          delete productObj.importPrice;
+          Object.assign(product, productObj);
+        }
+      });
+    }
+
     const total = await Product.countDocuments(query);
 
     return res.status(200).json({
@@ -620,6 +665,18 @@ const getProductsByCategory = async (req, res) => {
       .populate("variants.color")
       .populate("variants.sizes.size");
 
+    // Remove importPrice from response for non-admin/manager users
+    const userRole = req.user?.role;
+    if (userRole !== "admin" && userRole !== "manager") {
+      products.forEach((product) => {
+        if (product.toObject) {
+          const productObj = product.toObject();
+          delete productObj.importPrice;
+          Object.assign(product, productObj);
+        }
+      });
+    }
+
     const total = await Product.countDocuments(query);
 
     return res.status(200).json({
@@ -643,14 +700,14 @@ const getProductReviews = async (req, res) => {
       page = 1,
       limit = 10,
       rating,
-      sortBy = 'createdAt',
-      sortOrder = 'desc'
+      sortBy = "createdAt",
+      sortOrder = "desc",
     } = req.query;
 
     const product = await Product.findById(id);
     if (!product) {
       return res.status(404).json({
-        msg: "Không tìm thấy sản phẩm"
+        msg: "Không tìm thấy sản phẩm",
       });
     }
 
@@ -659,17 +716,17 @@ const getProductReviews = async (req, res) => {
 
     // Filter by rating if provided
     if (rating) {
-      reviews = reviews.filter(review => review.rating === parseInt(rating));
+      reviews = reviews.filter((review) => review.rating === parseInt(rating));
     }
 
     // Sort reviews
     const sortOptions = {};
-    sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+    sortOptions[sortBy] = sortOrder === "desc" ? -1 : 1;
     reviews.sort((a, b) => {
-      if (sortBy === 'rating') {
-        return sortOrder === 'desc' ? b.rating - a.rating : a.rating - b.rating;
+      if (sortBy === "rating") {
+        return sortOrder === "desc" ? b.rating - a.rating : a.rating - b.rating;
       }
-      return sortOrder === 'desc' 
+      return sortOrder === "desc"
         ? new Date(b[sortBy]) - new Date(a[sortBy])
         : new Date(a[sortBy]) - new Date(b[sortBy]);
     });
@@ -683,10 +740,12 @@ const getProductReviews = async (req, res) => {
     // Populate user information for reviews
     const populatedReviews = await Promise.all(
       paginatedReviews.map(async (review) => {
-        const user = await User.findById(review.user).select('firstName lastName');
+        const user = await User.findById(review.user).select(
+          "firstName lastName"
+        );
         return {
           ...review.toObject(),
-          user: user || { firstName: 'Unknown', lastName: 'User' }
+          user: user || { firstName: "Unknown", lastName: "User" },
         };
       })
     );
@@ -703,12 +762,12 @@ const getProductReviews = async (req, res) => {
       totalPages: Math.ceil(total / limit),
       currentPage: parseInt(page),
       ratingStats,
-      averageRating: product.ratingAdd
+      averageRating: product.ratingAdd,
     });
   } catch (error) {
     console.error("Error getting product reviews:", error);
     return res.status(500).json({
-      msg: "Lỗi server"
+      msg: "Lỗi server",
     });
   }
 };
@@ -737,18 +796,28 @@ const getTopSellingProducts = async (req, res) => {
     }
 
     return res.status(200).json({
-      products: products.map((product) => ({
-        _id: product._id,
-        name: product.name,
-        description: product.description,
-        price: product.price,
-        discount: product.discount,
-        images: product.images,
-        sold_count: product.sold_count,
-        category: product.category,
-        variants: product.variants,
-        rating: product.rating,
-      })),
+      products: products.map((product) => {
+        const productData = {
+          _id: product._id,
+          name: product.name,
+          description: product.description,
+          price: product.price,
+          discount: product.discount,
+          images: product.images,
+          sold_count: product.sold_count,
+          category: product.category,
+          variants: product.variants,
+          rating: product.rating,
+        };
+
+        // Add importPrice for admin and manager
+        const userRole = req.user?.role;
+        if (userRole === "admin" || userRole === "manager") {
+          productData.importPrice = product.importPrice;
+        }
+
+        return productData;
+      }),
     });
   } catch (error) {
     console.error("Error getting top selling products:", error);
@@ -770,5 +839,5 @@ module.exports = {
   getProductsByCategory,
   getTopSellingProducts,
   getProductReviews,
-  updateImportPrice
+  updateImportPrice,
 };

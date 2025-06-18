@@ -78,6 +78,7 @@ const loginUser = async (req, res) => {
         const token = jwt.sign({
             userId: user._id,
             fullName: user.fullName,
+            role: user.role
         },
             //luu thong tin file .env, bao mat tranh lo thong tin nguoi dung
             process.env.SECRET_KEY, {
